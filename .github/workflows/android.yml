@@ -2,52 +2,77 @@ name: Build Android App
 on:
   push:
     branches: [ main ]
+
 jobs:
-  build:
+  build_apk:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - run: unzip -o mtkmicro-lab.zip
-      
-      - uses: actions/setup-node@v4
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Unzip Source Code
+        run: unzip -o mtkmicro-lab.zip
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          
-      - run: npm install && npm run build
-      
-      - run: |
-          sed -i 's|href="/|href="./|g' dist/index.html
-          sed -i 's|src="/|src="./|g' dist/index.html
-          sed -i 's|crossorigin||g' dist/index.html
-          if grep -q "cdn.tailwindcss.com" dist/index.html; then
-            wget -qO dist/tailwind.js https://cdn.tailwindcss.com
-            sed -i 's|https://cdn.tailwindcss.com|./tailwind.js|g' dist/index.html
-            sed -i 's|https://cdn.tailwindcss.com/|./tailwind.js|g' dist/index.html
-          fi
-          
-      - run: |
+
+      - name: Install Web Dependencies & Build
+        run: |
+          npm install
+          npm run build
+
+      - name: Configure Capacitor
+        run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android
           rm -rf android
           npx cap init "MTKmicro Lab" com.mtkmicrolab.app --web-dir dist
-          echo '{"appId":"com.mtkmicrolab.app","appName":"MTKmicro Lab","webDir":"dist","bundledWebRuntime":false,"server":{"androidScheme":"http","cleartext":true,"allowNavigation":["*"]}}' > capacitor.config.json
+          
+          echo '{
+            "appId": "com.mtkmicrolab.app",
+            "appName": "MTKmicro Lab",
+            "webDir": "dist",
+            "bundledWebRuntime": false,
+            "server": {
+              "androidScheme": "https",
+              "cleartext": true,
+              "allowNavigation": ["*"]
+            }
+          }' > capacitor.config.json
+          
           npx cap add android
-          
-      - run: |
-          echo "configurations.all { resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.24', 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24', 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24' }" >> android/app/build.gradle
-          
-      - run: |
-          sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' android/app/src/main/AndroidManifest.xml
-          
-      - uses: actions/setup-java@v5
+
+      - name: Fix Kotlin Version Conflict
+        run: |
+          echo "
+          configurations.all {
+              resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.24'
+              resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24'
+              resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24'
+          }
+          " >> android/app/build.gradle
+
+      - name: Inject Android Permissions
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' $MANIFEST
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' $MANIFEST
+
+      - name: Setup Java Environment
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
-          
-      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
-      
-      - uses: actions/upload-artifact@v4
+
+      - name: Build Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: MTK-Lab-App-Final
+          name: MTKmicroLab-Ready
           path: android/app/build/outputs/apk/debug/*.apk
