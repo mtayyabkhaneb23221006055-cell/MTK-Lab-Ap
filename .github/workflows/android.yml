@@ -18,10 +18,15 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Web Dependencies & Build
+      - name: Install Dependencies & Build
         run: |
           npm install
           npm run build
+
+      - name: Fix Vite CORS Issue for Android WebView
+        run: |
+          # Remove 'crossorigin' attribute which blocks CSS in Capacitor
+          sed -i 's/ crossorigin//g' dist/index.html
 
       - name: Configure Capacitor
         run: |
@@ -35,7 +40,7 @@ jobs:
             "webDir": "dist",
             "bundledWebRuntime": false,
             "server": {
-              "androidScheme": "https",
+              "androidScheme": "http",
               "cleartext": true,
               "allowNavigation": ["*"]
             }
@@ -71,8 +76,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload Native APK
         uses: actions/upload-artifact@v4
         with:
-          name: MTKmicroLab-Ready
+          name: MTKmicroLab-Perfect
           path: android/app/build/outputs/apk/debug/*.apk
